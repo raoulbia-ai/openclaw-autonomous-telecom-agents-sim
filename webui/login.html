@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NKA — Access</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      font-family: system-ui, sans-serif;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    }
+    .title {
+      color: #f1f5f9;
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0 0 0.25rem;
+    }
+    .subtitle {
+      color: #64748b;
+      font-size: 0.875rem;
+      margin: 0 0 2rem;
+    }
+    label {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    input[type="password"] {
+      width: 100%;
+      padding: 0.65rem 0.875rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="password"]:focus { border-color: #6366f1; }
+    button {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: 0.7rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #4f46e5; }
+    .error {
+      display: none;
+      margin-top: 0.75rem;
+      color: #f87171;
+      font-size: 0.85rem;
+      text-align: center;
+    }
+    .error.visible { display: block; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+    .shake { animation: shake 0.35s ease; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <p class="title">Network Knowledge Agent</p>
+    <p class="subtitle">Enter your access passphrase to continue.</p>
+    <form id="form">
+      <label for="pass">Passphrase</label>
+      <input id="pass" type="password" placeholder="••••••••••••" autocomplete="current-password" autofocus />
+      <button type="submit">Enter</button>
+      <p class="error" id="err">Invalid passphrase. Try again.</p>
+    </form>
+  </div>
+  <script>
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pass = document.getElementById('pass').value;
+      const err  = document.getElementById('err');
+      err.classList.remove('visible');
+
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passphrase: pass }),
+      });
+
+      if (res.ok) {
+        window.location.href = '/';
+      } else {
+        err.classList.add('visible');
+        document.querySelector('.card').classList.add('shake');
+        setTimeout(() => document.querySelector('.card').classList.remove('shake'), 400);
+        document.getElementById('pass').value = '';
+        document.getElementById('pass').focus();
+      }
+    });
+  </script>
+</body>
+</html>
