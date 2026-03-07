@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "claude-recall": "^0.15.31"
+    "express": "^4.21.0"
   }
 }
