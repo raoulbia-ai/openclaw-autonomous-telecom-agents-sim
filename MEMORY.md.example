@@ -1,0 +1,52 @@
+# NKA Memory — Network Knowledge Agent
+
+Last updated: (auto-populated by SENTINEL)
+Cycle 0
+
+---
+
+## Network State
+
+- **total_cells**: 50
+- **outlier_count**: 0
+- **elevated_count**: 0
+- **alarm_count**: 0
+- **cross_zone_count**: 0
+- **last_heartbeat_at**: (none)
+- **last_atlas_at**: (none)
+
+| Cell ID | Issue | Streak |
+|---------|-------|--------|
+| (populated by SENTINEL each cycle) | | |
+
+---
+- **growth_wave_count**: 0
+- **last_growth_at**: (none)
+- **growth_target**: 8000
+- **next_growth_possible**: When total_cells < 8000 AND >40 min since last_growth_at
+
+---
+
+## Role Playbooks
+
+| Agent | Playbook | Schedule |
+|-------|----------|----------|
+| SENTINEL | SENTINEL-FAST.md | Every 5 min |
+| ORACLE | ORACLE.md | Every 15 min |
+| ARCHITECT | ARCHITECT.md | Every 30 min |
+
+---
+
+## Bulletin Board Schema
+
+All agents append to `artifacts/agent-comms.jsonl` (one JSON object per line):
+
+```json
+{"at": "ISO8601", "from": "AGENT_NAME", "type": "handoff|advisory|atlas|action", "message": "..."}
+```
+
+---
+
+## Recent History
+
+(Populated automatically as agents run cycles)
