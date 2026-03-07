@@ -8,7 +8,7 @@ Three AI agents autonomously monitor, analyse, and expand a simulated Irish 5G n
 
 A stochastic event engine generates realistic network faults — equipment failures, backhaul outages, interference, maintenance windows. Fault rates are correlated with live weather data (Met Eireann storm warnings). Backhaul faults spread interference to nearby sites. Ghost alarms linger after faults resolve.
 
-Three agents run on independent cron schedules via [OpenClaw](https://github.com/anthropics/claude-code):
+Three agents run on independent cron schedules via OpenClaw (an agent runtime):
 
 | Agent | Role | Cycle |
 |-------|------|-------|
@@ -49,7 +49,7 @@ The remediation actions are fixed. The decisions — which action, which cell, a
 ### Prerequisites
 
 - Node.js 20+
-- [OpenClaw](https://github.com/anthropics/claude-code) CLI
+- OpenClaw CLI (agent runtime)
 - An OpenAI-compatible LLM endpoint (llama.cpp, Ollama, etc.)
 
 ### Setup
