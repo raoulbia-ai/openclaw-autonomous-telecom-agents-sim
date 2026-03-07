@@ -21,8 +21,8 @@ export default function AboutPage() {
           Can AI agents develop genuine situational awareness of a live network — given the tools and context a human operator would have?
         </h1>
         <p className="mt-4 text-slate-400 text-base leading-relaxed">
-          Three autonomous agents watch a live simulated 5G network across Ireland. They get what any
-          new analyst gets on day one — telemetry, weather feeds, a playbook, a shared bulletin board —
+          Three autonomous agents are pointed at a live simulated 5G network across Ireland. They have
+          what any new analyst gets on day one — telemetry, weather feeds, a playbook, a shared bulletin board —
           and nothing more. No human prompts them. Beyond a 50-cell seed network, everything in this UI was produced by the agents themselves.
         </p>
       </div>
