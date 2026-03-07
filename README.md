@@ -49,7 +49,7 @@ The remediation actions are fixed. The decisions — which action, which cell, a
 ### Prerequisites
 
 - Node.js 20+
-- OpenClaw CLI (agent runtime)
+- OpenClaw — agent runtime that manages cron scheduling, session isolation, and tool permissions
 - An OpenAI-compatible LLM endpoint (llama.cpp, Ollama, etc.)
 
 ### Setup
