@@ -19,8 +19,17 @@ const path = require('path');
 const WORLD_STATE_FILE = path.join(__dirname, '..', '..', '..', 'mock-eiap', 'world-state.json');
 const REMEDIATION_LOG  = path.join(__dirname, '..', '..', '..', 'artifacts', 'remediation-log.jsonl');
 
-const cellId = process.argv[2];
-const action = process.argv[3];
+const rawCellId = process.argv[2];
+const action    = process.argv[3];
+
+// Normalize: agents may pass "301", "NRCellDU-301", or full URN — world state uses "NRCellDU-<num>"
+function normalizeCellId(id) {
+  if (!id) return id;
+  if (id.startsWith('NRCellDU-')) return id;
+  const num = id.replace(/.*NRCellDU=/, '').replace(/\D/g, '') || id;
+  return `NRCellDU-${num}`;
+}
+const cellId = normalizeCellId(rawCellId);
 
 if (!cellId || !action) {
   console.error('Usage: node remediate-cell.js <cellId> <action>');
