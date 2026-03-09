@@ -65,5 +65,8 @@ artifacts/.openclaw/
 _legacy/
 tests/
 
+# Drafts
+linkedin-article.md
+
 # OpenClaw workspace state
 .openclaw/

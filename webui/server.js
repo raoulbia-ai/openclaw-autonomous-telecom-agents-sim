@@ -65,15 +65,40 @@ app.use(helmet({
   },
 }));
 
-// CORS — only allow same-origin (the public IP)
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://46.62.146.152:9000';
+// CORS — allow both HTTPS URLs (with and without port)
+const ALLOWED_ORIGINS = [
+  process.env.ALLOWED_ORIGIN || 'https://openclaw-nka.duckdns.org',
+  'https://openclaw-nka.duckdns.org:9000',
+];
 app.use(cors({
-  origin: ALLOWED_ORIGIN,
+  origin: (origin, cb) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) cb(null, true);
+    else cb(new Error('CORS blocked'));
+  },
   credentials: true,
 }));
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
+
+// Request logger — appends to webui/data/access.log
+const ACCESS_LOG = path.join(__dirname, 'data', 'access.log');
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const line = [
+      new Date().toISOString(),
+      req.ip,
+      req.method,
+      req.originalUrl,
+      res.statusCode,
+      `${Date.now() - start}ms`,
+      req.get('user-agent') || '-',
+    ].join(' | ');
+    fs.appendFile(ACCESS_LOG, line + '\n', () => {});
+  });
+  next();
+});
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
@@ -81,7 +106,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: false,
+    secure: fs.existsSync('/etc/letsencrypt/live/openclaw-nka.duckdns.org/fullchain.pem'),
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
   },
@@ -576,6 +601,30 @@ if (fs.existsSync(DIST)) {
   app.get('/', (req, res) => res.send('Run `npm run build` in client/ to build the frontend.'));
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[webui] listening on http://0.0.0.0:${PORT}`);
-});
+// Start HTTPS if certs exist, otherwise HTTP
+const TLS_CERT = '/etc/letsencrypt/live/openclaw-nka.duckdns.org/fullchain.pem';
+const TLS_KEY  = '/etc/letsencrypt/live/openclaw-nka.duckdns.org/privkey.pem';
+
+if (fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY)) {
+  const tlsOpts = {
+    cert: fs.readFileSync(TLS_CERT),
+    key:  fs.readFileSync(TLS_KEY),
+  };
+  const server = https.createServer(tlsOpts, app);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[webui] listening on https://0.0.0.0:${PORT}`);
+  });
+  // Also listen on 443 so https://domain works without :port
+  if (PORT !== 443 && PORT !== '443') {
+    const server443 = https.createServer(tlsOpts, app);
+    server443.listen(443, '0.0.0.0', () => {
+      console.log(`[webui] also listening on https://0.0.0.0:443`);
+    }).on('error', (e) => {
+      console.log(`[webui] could not bind 443: ${e.message}`);
+    });
+  }
+} else {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[webui] listening on http://0.0.0.0:${PORT}`);
+  });
+}

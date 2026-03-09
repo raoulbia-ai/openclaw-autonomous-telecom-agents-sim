@@ -1,5 +1,11 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
 import Dashboard from './pages/Dashboard';
 import MapPage from './pages/MapPage';
 import CellsPage from './pages/CellsPage';
@@ -67,6 +73,7 @@ const NAV = [
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <div className="min-h-screen bg-slate-950 text-slate-100">
         <nav className="border-b border-slate-800 bg-slate-900">
           <div className="max-w-7xl mx-auto px-4 flex items-center gap-6 h-14">
