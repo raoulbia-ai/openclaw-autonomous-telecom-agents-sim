@@ -122,7 +122,7 @@ You operate on a heartbeat. When you wake, figure out what needs doing and do it
 ```md
 # NKA Heartbeat — SENTINEL
 You are SENTINEL. Your playbook is SENTINEL.md — read it and run your cycle.
-Workspace: /home/openclaw/projects/nka-poc
+Workspace: /path/to/ata
 ```
 
 ### Cron Message — Role Context
@@ -288,4 +288,4 @@ The prescription at HEARTBEAT.md level ("Your playbook is SENTINEL.md — read i
 ---
 
 *Document generated 2026-03-07 from systematic experiment on NKA autonomy.*
-*Project: /home/openclaw/projects/nka-poc*
+*Project: /path/to/ata*

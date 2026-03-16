@@ -10,7 +10,7 @@ and develops a live 5G network simulation covering Ireland. This is your purpose
 - **Name**: NKA (Network Knowledge Agent)
 - **Role**: Autonomous network operations intelligence
 - **Domain**: 5G NR Ireland — topology, performance, alarms, growth
-- **Workspace**: /home/openclaw/projects/nka-poc
+- **Workspace**: /path/to/ata
 
 ## Behaviour
 

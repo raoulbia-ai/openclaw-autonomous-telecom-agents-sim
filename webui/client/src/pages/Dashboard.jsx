@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { get } from '../lib/api';
-import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis,
-  Tooltip, ReferenceLine, CartesianGrid,
-} from 'recharts';
 
 function SituationPanel({ atlas }) {
   if (!atlas?.markdown) return null;
@@ -31,71 +27,6 @@ function SituationPanel({ atlas }) {
   );
 }
 
-function GrowthChart({ heartbeats, comms }) {
-  if (!heartbeats?.length) return null;
-
-  // One point per cycle — deduplicate by cycle number, keep latest
-  const byTime = {};
-  for (const h of heartbeats) {
-    const key = h.at;
-    if (!byTime[key] || h.cells > (byTime[key].cells ?? 0)) byTime[key] = h;
-  }
-  const data = Object.values(byTime)
-    .sort((a, b) => new Date(a.at) - new Date(b.at))
-    .map(h => ({
-      at: h.at,
-      t: new Date(h.at).getTime(),
-      label: new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      cells: h.cells,
-    }));
-
-  if (data.length < 2) return null;
-
-  const waves = (comms ?? []).filter(c => c.from === 'ARCHITECT' && c.type === 'growth');
-
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0].payload;
-    return (
-      <div className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-xs shadow-lg">
-        <p className="text-slate-300 font-medium">{d.cells} cells</p>
-        <p className="text-slate-500">{new Date(d.at).toLocaleString()}</p>
-      </div>
-    );
-  };
-
-  return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-      <p className="text-xs uppercase tracking-widest text-slate-500 mb-4">Cell Growth Over Time</p>
-      <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-          <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} width={36} domain={['auto', 'auto']} />
-          <Tooltip content={<CustomTooltip />} />
-          {waves.map(w => (
-            <ReferenceLine
-              key={w.at}
-              x={new Date(w.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              stroke="#f59e0b"
-              strokeDasharray="4 3"
-              strokeWidth={1.5}
-              label={{ value: 'growth', position: 'top', fill: '#f59e0b', fontSize: 10 }}
-            />
-          ))}
-          <Line
-            type="stepAfter"
-            dataKey="cells"
-            stroke="#6366f1"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4, fill: '#6366f1', stroke: '#0f172a', strokeWidth: 2 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
 
 function timeAgo(iso) {
   if (!iso) return null;
@@ -120,33 +51,47 @@ const TYPE_BADGE = {
   growth:   'bg-green-900/50 text-green-300',
 };
 
+function formatCountdown(ms) {
+  if (ms == null) return null;
+  const mins = Math.round((ms - Date.now()) / 60000);
+  if (mins <= 0) return 'due now';
+  if (mins < 60) return `in ${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `in ${h}h ${m}m` : `in ${h}h`;
+}
+
+function formatInterval(ms) {
+  if (!ms) return '';
+  const h = ms / 3600000;
+  if (h < 1) return `every ${Math.round(ms / 60000)}m`;
+  return h % 1 === 0 ? `every ${h}h` : `every ${h.toFixed(1)}h`;
+}
+
 function AgentPulse({ comms, signals }) {
+  const [schedules, setSchedules] = useState({});
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const load = () => fetch('/api/agent-schedules').then(r => r.json()).then(setSchedules).catch(() => {});
+    load();
+    const id = setInterval(load, 300_000); // refresh every 5 min
+    return () => clearInterval(id);
+  }, []);
+
+  // tick every minute to update countdowns
+  useEffect(() => {
+    const id = setInterval(() => forceUpdate(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   if (!comms?.length) return null;
 
   // comms is newest-first from API — first match per agent is the latest
   const lastPerAgent = {};
-  const lastGrowth = comms.find(c => c.from === 'ARCHITECT' && c.type === 'growth');
   for (const c of comms) {
     if (!lastPerAgent[c.from]) lastPerAgent[c.from] = c;
   }
-
-  // ARCHITECT forecast
-  const totalCells = signals?.summary?.totalCells ?? 0;
-  const nextRunAt = lastGrowth
-    ? new Date(new Date(lastGrowth.at).getTime() + 30 * 60 * 1000)
-    : null;
-  const minsSinceGrowth = lastGrowth
-    ? (Date.now() - new Date(lastGrowth.at).getTime()) / 60000
-    : Infinity;
-  const willGrow = totalCells < 8000 && minsSinceGrowth > 40;
-  const minsUntil = nextRunAt ? Math.round((nextRunAt - Date.now()) / 60000) : null;
-  const nextRunLabel = minsUntil == null
-    ? null
-    : minsUntil <= 0
-    ? 'due now'
-    : minsUntil < 60
-    ? `in ${minsUntil}m`
-    : `in ${Math.floor(minsUntil / 60)}h ${minsUntil % 60}m`;
 
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-900 divide-y divide-slate-800">
@@ -170,19 +115,40 @@ function AgentPulse({ comms, signals }) {
                     <span className="text-xs text-slate-600">{timeAgo(entry.at)}</span>
                   </div>
                   <p className="text-xs text-slate-400 leading-snug line-clamp-2">{entry.message}</p>
-                  {name === 'ARCHITECT' && nextRunLabel && (
-                    <p className="text-xs mt-1.5 text-slate-500">
-                      Est. next run {nextRunLabel}
-                      {' · '}
-                      <span className={willGrow ? 'text-green-400' : 'text-slate-500'}>
-                        {willGrow ? 'growth condition met' : 'growth condition not met'}
-                      </span>
-                    </p>
-                  )}
+                  {(() => {
+                    const sched = schedules[name];
+                    if (!sched) return null;
+                    const nextLabel = formatCountdown(sched.nextRunAtMs);
+                    const intervalLabel = formatInterval(sched.everyMs);
+                    return (
+                      <p className="text-xs mt-1.5 text-slate-500">
+                        {intervalLabel}
+                        {nextLabel && <> · next cycle <span className="text-slate-400">{nextLabel}</span></>}
+                        {sched.lastRunStatus && sched.lastRunStatus !== 'ok' && (
+                          <> · <span className="text-red-400">last: {sched.lastRunStatus}</span></>
+                        )}
+                      </p>
+                    );
+                  })()}
                 </>
               ) : (
                 <p className="text-xs text-slate-600 italic">No transmissions yet</p>
               )}
+              {!entry && (() => {
+                const sched = schedules[name];
+                if (!sched) return null;
+                const nextLabel = formatCountdown(sched.nextRunAtMs);
+                const intervalLabel = formatInterval(sched.everyMs);
+                return (
+                  <p className="text-xs mt-1.5 text-slate-500">
+                    {intervalLabel}
+                    {nextLabel && <> · next cycle <span className="text-slate-400">{nextLabel}</span></>}
+                    {sched.lastRunStatus && sched.lastRunStatus !== 'ok' && (
+                      <> · <span className="text-red-400">last: {sched.lastRunStatus}</span></>
+                    )}
+                  </p>
+                );
+              })()}
             </div>
           </div>
         );
@@ -382,12 +348,13 @@ export default function Dashboard() {
   const [status, setStatus]     = useState(null);
   const [comms, setComms]       = useState(null);
   const [topology, setTopology]     = useState(null);
-  const [heartbeats, setHeartbeats] = useState(null);
   const [atlas, setAtlas]           = useState(null);
   const [extCtx, setExtCtx]         = useState(null);
   const [remediation, setRemediation] = useState(null);
   const [tick, setTick]         = useState(0);
   const [activeCard, setActive] = useState(null);
+  const [state, setState]       = useState(null);
+  const [schedules, setSchedules] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -397,21 +364,23 @@ export default function Dashboard() {
       get('/api/alarms').catch(() => null),
       get('/api/agent-comms').catch(() => null),
       get('/api/topology').catch(() => null),
-      get('/api/heartbeat').catch(() => null),
       get('/api/atlas').catch(() => null),
       get('/api/external-context').catch(() => null),
       get('/api/remediation').catch(() => null),
-    ]).then(([s, p, st, a, c, t, h, at, ec, rm]) => {
+      get('/api/state').catch(() => null),
+      get('/api/agent-schedules').catch(() => null),
+    ]).then(([s, p, st, a, c, t, at, ec, rm, state, sched]) => {
       setSignals(s);
       setPerf(p);
       setStatus(st);
       setAlarms(a);
       setComms(c);
       setTopology(t);
-      setHeartbeats(h);
       setAtlas(at);
       setExtCtx(ec);
       setRemediation(rm);
+      setState(state);
+      setSchedules(sched);
     });
   }, [tick]);
 
@@ -468,9 +437,53 @@ export default function Dashboard() {
         />
       </div>
 
-      <SituationPanel atlas={atlas} />
+      {state && schedules?.ARCHITECT && (() => {
+        const lastGrowth = state.last_growth_at ? new Date(state.last_growth_at).getTime() : null;
+        const cooldownMs = 40 * 60000; // 40m growth cooldown
+        const archNext = schedules.ARCHITECT.nextRunAtMs;
+        // Growth eligible after cooldown expires; actual growth happens at next ARCHITECT run after that
+        const eligibleAt = lastGrowth ? lastGrowth + cooldownMs : null;
+        const now = Date.now();
+        // Next growth = whichever is later: cooldown expiry or next ARCHITECT run
+        const nextGrowthMs = eligibleAt && archNext
+          ? Math.max(eligibleAt, archNext)
+          : archNext || eligibleAt;
+        const growthEta = nextGrowthMs ? formatCountdown(nextGrowthMs) : null;
+        const growthTarget = state.growth_target ?? 0;
+        const totalCells = signals?.summary?.totalCells ?? 0;
+        const progress = growthTarget > 0 ? Math.min(100, Math.round((totalCells / growthTarget) * 100)) : null;
 
-      <GrowthChart heartbeats={heartbeats} comms={comms} />
+        return (
+          <div className="rounded-lg border border-green-800/40 bg-green-950/10 p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-green-400">Next Growth Wave</p>
+                <p className="text-lg font-semibold text-slate-100 mt-0.5">
+                  Wave {(state.growth_wave_count ?? 0) + 1}
+                  {growthEta && <span className="text-sm font-normal text-slate-400 ml-2">{growthEta}</span>}
+                </p>
+                {nextGrowthMs && (
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {new Date(nextGrowthMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {lastGrowth && <> · last growth {timeAgo(state.last_growth_at)}</>}
+                  </p>
+                )}
+              </div>
+            </div>
+            {progress != null && (
+              <div className="text-right flex-none">
+                <p className="text-xs text-slate-500">{totalCells} / {growthTarget} cells</p>
+                <div className="w-32 h-1.5 bg-slate-800 rounded-full mt-1 overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="text-xs text-slate-600 mt-0.5">{progress}%</p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      <SituationPanel atlas={atlas} />
 
       <AgentPulse comms={comms} signals={signals} />
 

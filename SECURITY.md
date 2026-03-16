@@ -80,7 +80,7 @@ Express serves directly on `:9000` for now.
 
 ## 7. DuckDNS Domain
 
-Registered `openclaw-nka.duckdns.org` pointing to `176.61.57.175`. Ready for HTTPS when firewall allows port 443.
+Registered `your-domain.example.com` pointing to `[public-ip]`. Ready for HTTPS when firewall allows port 443.
 
 ---
 

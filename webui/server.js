@@ -67,8 +67,8 @@ app.use(helmet({
 
 // CORS — allow both HTTPS URLs (with and without port)
 const ALLOWED_ORIGINS = [
-  process.env.ALLOWED_ORIGIN || 'https://openclaw-nka.duckdns.org',
-  'https://openclaw-nka.duckdns.org:9000',
+  process.env.ALLOWED_ORIGIN || 'https://your-domain.example.com',
+  'https://your-domain.example.com:9000',
 ];
 app.use(cors({
   origin: (origin, cb) => {
@@ -106,7 +106,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: fs.existsSync('/etc/letsencrypt/live/openclaw-nka.duckdns.org/fullchain.pem'),
+    secure: fs.existsSync(path.join(__dirname, '..', 'certs', 'fullchain.pem')),
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
   },
@@ -173,16 +173,48 @@ function readArtifact(name) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
-app.get('/api/ollama/status', requireAuth, async (req, res) => {
-  const host = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+app.get('/api/llm/status', requireAuth, async (req, res) => {
+  // Check local Ollama (LLM provider for NKA agents)
+  // Uses /v1/models endpoint — no auth needed on localhost
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000);
-    const r = await fetch(`${host}/api/tags`, { signal: ctrl.signal });
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    const r = await fetch('http://127.0.0.1:11434/v1/models', {
+      signal: ctrl.signal,
+    });
     clearTimeout(timer);
     res.json({ reachable: r.ok });
   } catch {
     res.json({ reachable: false });
+  }
+});
+
+app.get('/api/agent-schedules', (req, res) => {
+  const CRON_IDS = {
+    'cef2fd4d-46de-426e-88d5-878353737b93': 'SENTINEL',
+    '42104c61-d970-4b9f-9cd8-51dafc73e6b2': 'ORACLE',
+    '62036869-c613-4bf0-a9e9-8852f40494ef': 'ARCHITECT',
+  };
+  try {
+    const jobsPath = path.join(process.env.HOME, '.openclaw-ata/cron/jobs.json');
+    const data = JSON.parse(fs.readFileSync(jobsPath, 'utf8'));
+    const schedules = {};
+    for (const job of data.jobs || []) {
+      const agent = CRON_IDS[job.id];
+      if (!agent) continue;
+      const state = job.state || {};
+      const everyMs = job.schedule?.everyMs;
+      schedules[agent] = {
+        enabled: job.enabled,
+        everyMs,
+        nextRunAtMs: state.nextRunAtMs,
+        lastRunStatus: state.lastRunStatus || state.lastStatus,
+        lastRunAtMs: state.lastRunAtMs,
+      };
+    }
+    res.json(schedules);
+  } catch {
+    res.json({});
   }
 });
 
@@ -335,10 +367,48 @@ app.get('/api/memory', requireAuth, (req, res) => {
 });
 
 app.get('/api/growth-log', requireAuth, (req, res) => {
+  // Primary source: growth-log.json (written by log-growth.js)
+  let waves = [];
   const file = path.join(ARTIFACTS_DIR, 'growth-log.json');
-  if (!fs.existsSync(file)) return res.json([]);
-  try { res.json(JSON.parse(fs.readFileSync(file))); }
-  catch { res.json([]); }
+  if (fs.existsSync(file)) {
+    try { waves = JSON.parse(fs.readFileSync(file)); } catch {}
+  }
+
+  // Secondary source: agent-comms.jsonl growth entries (written by ARCHITECT directly)
+  // Merge any growth comms that log-growth.js missed
+  const commsFile = path.join(ARTIFACTS_DIR, 'agent-comms.jsonl');
+  if (fs.existsSync(commsFile)) {
+    try {
+      const knownWaves = new Set(waves.map(w => w.wave));
+      const lines = fs.readFileSync(commsFile, 'utf8').trim().split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== 'growth') continue;
+          const msg = entry.message || '';
+          const waveMatch = msg.match(/wave\s+(\d+)/i);
+          if (!waveMatch) continue;
+          const waveNum = parseInt(waveMatch[1]);
+          if (knownWaves.has(waveNum)) continue;
+          // Extract counties from message like "Added Cork, Galway, Limerick."
+          const countiesMatch = msg.match(/Added\s+(.+?)\./i);
+          const counties = countiesMatch ? countiesMatch[1].split(/,\s*/) : [];
+          waves.push({
+            at: entry.at,
+            wave: waveNum,
+            sitesAdded: counties.length,
+            cellsAdded: counties.length,
+            counties,
+            note: msg,
+          });
+          knownWaves.add(waveNum);
+        } catch {}
+      }
+    } catch {}
+  }
+
+  waves.sort((a, b) => (a.wave || 0) - (b.wave || 0));
+  res.json(waves);
 });
 
 app.get('/api/city-params', requireAuth, (req, res) => {
@@ -472,14 +542,14 @@ app.post('/api/atlas/run', (req, res) => {
 // ---------------------------------------------------------------------------
 
 const RAW_STREAM_PATH = path.join(
-  process.env.HOME, '.openclaw', 'logs', 'raw-stream.jsonl'
+  process.env.HOME, '.openclaw-ata', 'logs', 'raw-stream.jsonl'
 );
 
 // Map runId → agent name by checking gateway log for the most recent cron start
 const CRON_AGENTS = {
-  '166424a2-47d4-4895-a777-0b4a3ab4314d': 'SENTINEL',
-  'e20964ae-9c18-4f0a-813f-98189ad3df0c': 'ORACLE',
-  '18078407-66d6-471d-aa52-48d59fa43798': 'ARCHITECT',
+  'cef2fd4d-46de-426e-88d5-878353737b93': 'SENTINEL',
+  '42104c61-d970-4b9f-9cd8-51dafc73e6b2': 'ORACLE',
+  '62036869-c613-4bf0-a9e9-8852f40494ef': 'ARCHITECT',
 };
 
 // Track active runId → agent mapping (detected from content)
@@ -602,8 +672,8 @@ if (fs.existsSync(DIST)) {
 }
 
 // Start HTTPS if certs exist, otherwise HTTP
-const TLS_CERT = '/etc/letsencrypt/live/openclaw-nka.duckdns.org/fullchain.pem';
-const TLS_KEY  = '/etc/letsencrypt/live/openclaw-nka.duckdns.org/privkey.pem';
+const TLS_CERT = path.join(__dirname, '..', 'certs', 'fullchain.pem');
+const TLS_KEY  = path.join(__dirname, '..', 'certs', 'privkey.pem');
 
 if (fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY)) {
   const tlsOpts = {
@@ -614,15 +684,7 @@ if (fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY)) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[webui] listening on https://0.0.0.0:${PORT}`);
   });
-  // Also listen on 443 so https://domain works without :port
-  if (PORT !== 443 && PORT !== '443') {
-    const server443 = https.createServer(tlsOpts, app);
-    server443.listen(443, '0.0.0.0', () => {
-      console.log(`[webui] also listening on https://0.0.0.0:443`);
-    }).on('error', (e) => {
-      console.log(`[webui] could not bind 443: ${e.message}`);
-    });
-  }
+
 } else {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[webui] listening on http://0.0.0.0:${PORT}`);
